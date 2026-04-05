@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Messenger Mini</title>
+
+    <style>
+      body {
+        margin: 0;
+        font-family: "Segoe UI", sans-serif;
+        background: #e5ddd5;
+        display: flex;
+        justify-content: center;
+        height: 100vh;
+      }
+
+      .chat-app {
+        width: 420px;
+        height: 90vh;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        border-radius: 15px;
+        overflow: hidden;
+      }
+
+      /* Header */
+      .header {
+        background: #0084ff;
+        color: white;
+        padding: 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .avatar {
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        background: white;
+      }
+
+      /* Messages */
+      .messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .message {
+        display: flex;
+      }
+
+      .bubble {
+        max-width: 70%;
+        padding: 10px;
+        border-radius: 15px;
+      }
+
+      .me {
+        justify-content: flex-end;
+      }
+
+      .me .bubble {
+        background: #0084ff;
+        color: white;
+      }
+
+      .other .bubble {
+        background: #f1f0f0;
+      }
+
+      /* Typing */
+      .typing {
+        font-size: 12px;
+        color: gray;
+        margin-left: 10px;
+      }
+
+      /* Input */
+      .input-area {
+        display: flex;
+        padding: 10px;
+        border-top: 1px solid #ddd;
+      }
+
+      textarea {
+        flex: 1;
+        border-radius: 20px;
+        padding: 10px;
+      }
+
+      button {
+        margin-left: 8px;
+        border: none;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        background: #0084ff;
+        color: white;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="chat-app">
+      <div class="header">
+        <div class="avatar"></div>
+        <div style="flex: 1">Chat nội bộ 😎</div>
+        <button id="clearBtn" style="background: red">🗑</button>
+      </div>
+
+      <div id="messages" class="messages"></div>
+      <div id="typing" class="typing"></div>
+
+      <div class="input-area">
+        <textarea id="input" placeholder="Nhắn gì đó..."></textarea>
+        <button id="sendBtn">➤</button>
+      </div>
+    </div>
+
+    <script type="module">
+      import { remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+      import {
+        getDatabase,
+        ref,
+        push,
+        onValue,
+        set,
+      } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+
+    /* 🔥 Xóa chat */
+      document.getElementById("clearBtn").addEventListener("click", () => {
+        if (confirm("Xóa toàn bộ chat? 😏")) {
+          remove(messagesRef);
+        }
+      });
+      /* 🔥 CONFIG CHUẨN (ĐÃ FIX REGION) */
+      const firebaseConfig = {
+        apiKey: "AIzaSyDywrBiaqrx4FGAKzSgtn2bWxJSDY_s4_0",
+        authDomain: "chatapp-e2115.firebaseapp.com",
+        databaseURL:
+          "https://chatapp-e2115-default-rtdb.asia-southeast1.firebasedatabase.app/",
+        projectId: "chatapp-e2115",
+        storageBucket: "chatapp-e2115.firebasestorage.app",
+        messagingSenderId: "537391291038",
+        appId: "1:537391291038:web:4f891a73711586a9fdf98f",
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getDatabase(app);
+
+      const messagesRef = ref(db, "chat");
+      const typingRef = ref(db, "typing");
+
+      /* 🔥 USER (AUTO KHÁC NHAU) */
+      let userId = sessionStorage.getItem("userId");
+      let userName = sessionStorage.getItem("userName");
+
+      if (!userId) {
+        userId = "user_" + Math.random().toString(36).slice(2, 6);
+        userName = "User " + userId.slice(-2);
+
+        sessionStorage.setItem("userId", userId);
+        sessionStorage.setItem("userName", userName);
+      }
+
+      /* 📥 RENDER */
+      onValue(messagesRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        const box = document.getElementById("messages");
+        box.innerHTML = "";
+
+        Object.keys(data).forEach((id) => {
+          const msg = data[id];
+
+          const wrap = document.createElement("div");
+          wrap.className = "message " + (msg.user === userId ? "me" : "other");
+
+          const bubble = document.createElement("div");
+          bubble.className = "bubble";
+          bubble.innerHTML = `
+      <div style="font-size:11px; opacity:0.6">${msg.name}</div>
+      <div>${msg.text}</div>
+    `;
+
+          wrap.appendChild(bubble);
+          box.appendChild(wrap);
+        });
+
+        box.scrollTop = box.scrollHeight;
+      });
+
+      /* 📤 SEND */
+      function sendMessage() {
+        const input = document.getElementById("input");
+        const text = input.value.trim();
+        if (!text) return;
+
+        push(messagesRef, {
+          text,
+          user: userId,
+          name: userName,
+          time: Date.now(),
+        });
+
+        set(typingRef, null);
+        input.value = "";
+      }
+
+      /* CLICK FIX */
+      document.getElementById("sendBtn").addEventListener("click", sendMessage);
+
+      /* ENTER */
+      document.getElementById("input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
+      /* TYPING */
+      document.getElementById("input").addEventListener("input", () => {
+        set(typingRef, userId);
+      });
+
+      /* SHOW TYPING */
+      onValue(typingRef, (snapshot) => {
+        const typing = snapshot.val();
+        const el = document.getElementById("typing");
+
+        if (typing && typing !== userId) {
+          el.textContent = "Đang nhập...";
+        } else {
+          el.textContent = "";
+        }
+      });
+    </script>
+  </body>
+</html>
